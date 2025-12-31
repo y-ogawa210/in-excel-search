@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Excel内キーワード検索ツール</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+<style>
+  body {
+    font-family: sans-serif;
+    line-height: 1.6;
+  }
+  table {
+    border-collapse: collapse;
+    margin-top: 10px;
+    width: 100%;
+  }
+  th, td {
+    border: 1px solid #aaa;
+    padding: 6px 10px;
+  }
+  th {
+    background: #eee;
+  }
+  .info-box {
+    margin-top: 20px;
+    padding: 15px;
+    border: 1px solid #ccc;
+    background: #fafafa;
+  }
+</style>
+</head>
+<body>
+
+<h2>Excel内キーワード検索ツール</h2>
+
+<!-- ▼ 説明（用途＋対象ユーザー） -->
+<div class="info-box">
+  <h3>このツールの用途</h3>
+  <p>
+    このツールは、Excelファイル内のデータを横断的に検索し、<br>
+    <strong>「どのシートの・どのセルに・どんな値が含まれているか」</strong> を一覧で確認できる検索ツールです。<br>
+    複数シートにまたがるデータの調査や、特定キーワードの位置特定を効率化します。
+  </p>
+</div>
+
+<hr>
+
+<!-- ▼ Excelアップロード -->
+<p><strong>Excelファイルを選択：</strong></p>
+<input type="file" id="excelInput" accept=".xlsx,.xls" />
+
+<!-- ▼ シート絞り込み -->
+<div style="margin-top:10px;">
+  <label>シート選択：</label>
+  <select id="sheetFilter">
+    <option value="all">全シート</option>
+  </select>
+</div>
+
+<!-- ▼ キーワード検索 -->
+<div style="margin-top:10px;">
+  <input type="text" id="keyword" placeholder="検索文字を入力" />
+  <button id="searchBtn">検索</button>
+</div>
+
+<!-- ▼ 結果表示 -->
+<div id="result" style="margin-top:20px;"></div>
+
+<script>
+let workbook = null;
+
+// Excel読み込み
+document.getElementById("excelInput").addEventListener("change", function(e) {
+  const file = e.target.files[0];
+  const reader = new FileReader();
+
+  reader.onload = function(event) {
+    const data = new Uint8Array(event.target.result);
+    workbook = XLSX.read(data, { type: "array" });
+
+    // シート名をプルダウンに追加
+    const sheetSelect = document.getElementById("sheetFilter");
+    sheetSelect.innerHTML = '<option value="all">全シート</option>';
+
+    workbook.SheetNames.forEach(name => {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      sheetSelect.appendChild(opt);
+    });
+
+    alert("Excelを読み込みました");
+  };
+
+  reader.readAsArrayBuffer(file);
+});
+
+// 検索処理
+document.getElementById("searchBtn").addEventListener("click", function() {
+  const keyword = document.getElementById("keyword").value.trim();
+  const filterSheet = document.getElementById("sheetFilter").value;
+
+  if (!keyword || !workbook) return;
+
+  let results = [];
+
+  workbook.SheetNames.forEach(sheetName => {
+    if (filterSheet !== "all" && sheetName !== filterSheet) return;
+
+    const sheet = workbook.Sheets[sheetName];
+    const range = XLSX.utils.decode_range(sheet["!ref"]);
+
+    for (let r = range.s.r; r <= range.e.r; r++) {
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        const cellAddress = XLSX.utils.encode_cell({ r, c });
+        const cell = sheet[cellAddress];
+
+        if (cell && cell.v != null) {
+          const value = String(cell.v);
+
+          if (value.includes(keyword)) {
+            results.push({
+              sheet: sheetName,
+              cell: cellAddress,
+              value
+            });
+          }
+        }
+      }
+    }
+  });
+
+  displayResults(results, keyword);
+});
+
+// 結果表示（表形式）
+function displayResults(results, keyword) {
+  let html = `<h3>検索結果：「${keyword}」</h3>`;
+
+  if (results.length === 0) {
+    html += "<p>一致するセルはありませんでした。</p>";
+    document.getElementById("result").innerHTML = html;
+    return;
+  }
+
+  html += `<p>${results.length} 件見つかりました。</p>`;
+
+  html += `
+    <table>
+      <tr>
+        <th>シート名</th>
+        <th>セル</th>
+        <th>値</th>
+      </tr>
+  `;
+
+  results.forEach(r => {
+    html += `
+      <tr>
+        <td>${r.sheet}</td>
+        <td>${r.cell}</td>
+        <td>${r.value}</td>
+      </tr>
+    `;
+  });
+
+  html += "</table>";
+
+  document.getElementById("result").innerHTML = html;
+}
+</script>
+
+</body>
+</html>
